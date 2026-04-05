@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { GameState, Portfolio, Holding, StockHolding, Venture, Loan, Trade } from '../types/game';
+import type { GameState, Portfolio, Holding, StockHolding, Venture, Loan, Trade, NPC, Staff, Auction } from '../types/game';
 import { getCryptoPrice, getStockPrice } from '../lib/marketEngine';
 
 interface GameStore extends GameState {
@@ -17,6 +17,13 @@ interface GameStore extends GameState {
   subtractCash: (amount: number) => void;
   getPortfolioValue: () => number;
   resetGame: () => void;
+
+  // New NPC & Auction Actions
+  updateNPC: (id: string, updates: Partial<NPC>) => void;
+  addAuction: (auction: Auction) => void;
+  updateAuction: (id: string, updates: Partial<Auction>) => void;
+  hireStaff: (staffId: string, ventureId: string, pay: number) => void;
+  updateStaff: (id: string, updates: Partial<Staff>) => void;
 }
 
 const initialPortfolio: Portfolio = {
@@ -28,6 +35,7 @@ const initialPortfolio: Portfolio = {
   losing_trades: 0,
   onboarding_completed: false,
   lessons_completed: [],
+  payback_status: 0,
 };
 
 const initialState: GameState = {
@@ -35,6 +43,9 @@ const initialState: GameState = {
   crypto_holdings: [],
   stock_holdings: [],
   ventures: [],
+  npcs: [],
+  staff: [],
+  auctions: [],
   loans: [],
   trades: [],
   last_update: Date.now(),
@@ -136,6 +147,36 @@ export const useGameStore = create<GameStore>()(
             ...state.portfolio,
             cash_balance: state.portfolio.cash_balance - amount,
           },
+        })),
+
+      updateNPC: (id, updates) =>
+        set((state) => ({
+          npcs: state.npcs.map((npc) => (npc.id === id ? { ...npc, ...updates } : npc)),
+        })),
+
+      addAuction: (auction) =>
+        set((state) => ({
+          auctions: [...state.auctions, auction],
+        })),
+
+      updateAuction: (id, updates) =>
+        set((state) => ({
+          auctions: state.auctions.map((a) => (a.id === id ? { ...a, ...updates } : a)),
+        })),
+
+      hireStaff: (staffId, ventureId, pay) =>
+        set((state) => ({
+          staff: state.staff.map((s) =>
+            s.id === staffId ? { ...s, employer_id: ventureId, current_pay: pay } : s
+          ),
+          ventures: state.ventures.map((v) =>
+            v.id === ventureId ? { ...v, staff_ids: [...v.staff_ids, staffId] } : v
+          ),
+        })),
+
+      updateStaff: (id, updates) =>
+        set((state) => ({
+          staff: state.staff.map((s) => (s.id === id ? { ...s, ...updates } : s)),
         })),
 
       getPortfolioValue: () => {

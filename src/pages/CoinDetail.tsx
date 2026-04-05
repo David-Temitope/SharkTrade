@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
-import { getCryptoPrice } from '../lib/marketEngine';
+import { getCryptoPrice, getPriceHistory } from '../lib/marketEngine';
 import { ArrowLeft, TrendingUp, TrendingDown, Wallet, LayoutGrid, Info, ShieldCheck, PieChart } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,27 +17,19 @@ const coins = {
 const CoinDetail: React.FC = () => {
   const { coinId } = useParams<{ coinId: string }>();
   const navigate = useNavigate();
-  const { portfolio, crypto_holdings, addTrade, updateHolding, subtractCash, addCash } = useGameStore();
+  const { portfolio, crypto_holdings, trades, addTrade, updateHolding, subtractCash, addCash } = useGameStore();
   const [tradeType, setTradeType] = useState<'buy' | 'sell'>('buy');
   const [quantity, setQuantity] = useState('');
+  const [timeframe, setTimeframe] = useState('1D');
   const [chartData, setChartData] = useState<any[]>([]);
 
   const coin = coins[coinId as keyof typeof coins] || { name: 'Unknown', symbol: 'UNK', emoji: '?', lesson: '' };
-  const currentPrice = getCryptoPrice(coinId || '', Date.now());
+  const currentPrice = getCryptoPrice(coinId || '', Date.now(), trades);
   const holding = crypto_holdings.find(h => h.asset_id === coinId);
 
   useEffect(() => {
-    // Generate dummy historical data
-    const data = [];
-    const now = Date.now();
-    for (let i = 24; i >= 0; i--) {
-      data.push({
-        time: `${i}h`,
-        price: getCryptoPrice(coinId || '', now - i * 3600 * 1000)
-      });
-    }
-    setChartData(data);
-  }, [coinId]);
+    setChartData(getPriceHistory(coinId || '', 'crypto', timeframe, trades));
+  }, [coinId, timeframe, trades]);
 
   const handleTrade = () => {
     const q = parseFloat(quantity);
@@ -97,6 +89,9 @@ const CoinDetail: React.FC = () => {
     }
   };
 
+  const firstPrice = chartData[0]?.price || currentPrice;
+  const changePct = ((currentPrice - firstPrice) / firstPrice) * 100;
+
   return (
     <div className="pb-12">
       <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-muted-foreground font-bold text-[10px] uppercase tracking-widest mb-6">
@@ -114,12 +109,24 @@ const CoinDetail: React.FC = () => {
           </div>
         </div>
         <div className="text-right">
-          <p className="text-2xl font-mono font-bold tracking-tight">${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
-          <div className="flex items-center justify-end gap-1 text-primary">
-            <TrendingUp size={14} />
-            <span className="text-[10px] font-mono font-bold">+4.20%</span>
+          <p className="text-2xl font-mono font-bold tracking-tight">${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          <div className={`flex items-center justify-end gap-1 ${changePct >= 0 ? 'text-primary' : 'text-red-500'}`}>
+            {changePct >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+            <span className="text-[10px] font-mono font-bold">{changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%</span>
           </div>
         </div>
+      </div>
+
+      <div className="flex gap-2 mb-4 overflow-x-auto pb-2 scrollbar-hide">
+        {['1H', '1D', '1W', '1M', '1Y', 'ALL'].map(tf => (
+          <button
+            key={tf}
+            onClick={() => setTimeframe(tf)}
+            className={`px-4 py-2 rounded-xl text-[10px] font-bold tracking-widest transition-all ${timeframe === tf ? 'bg-primary text-white' : 'bg-muted/30 text-muted-foreground'}`}
+          >
+            {tf}
+          </button>
+        ))}
       </div>
 
       <div className="h-64 mb-8 -mx-4">
@@ -127,8 +134,8 @@ const CoinDetail: React.FC = () => {
           <AreaChart data={chartData}>
             <defs>
               <linearGradient id={`gradient-${coinId}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="hsl(142 71% 45%)" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="hsl(142 71% 45%)" stopOpacity={0}/>
+                <stop offset="5%" stopColor={changePct >= 0 ? "hsl(142 71% 45%)" : "hsl(0 84% 60%)"} stopOpacity={0.3}/>
+                <stop offset="95%" stopColor={changePct >= 0 ? "hsl(142 71% 45%)" : "hsl(0 84% 60%)"} stopOpacity={0}/>
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(222 47% 15%)" />
@@ -143,7 +150,7 @@ const CoinDetail: React.FC = () => {
             <Area
               type="monotone"
               dataKey="price"
-              stroke="hsl(142 71% 45%)"
+              stroke={changePct >= 0 ? "hsl(142 71% 45%)" : "hsl(0 84% 60%)"}
               strokeWidth={3}
               fillOpacity={1}
               fill={`url(#gradient-${coinId})`}
@@ -158,7 +165,7 @@ const CoinDetail: React.FC = () => {
           <div className="flex items-center gap-2 text-muted-foreground text-[10px] uppercase tracking-widest font-bold mb-2">
             <LayoutGrid size={12} /> Market Cap
           </div>
-          <p className="text-sm font-mono font-bold">$1.2T</p>
+          <p className="text-sm font-mono font-bold">${(currentPrice * 18000000 / 1e12).toFixed(1)}T</p>
         </div>
         <div className="bg-card border border-muted p-4 rounded-2xl">
           <div className="flex items-center gap-2 text-muted-foreground text-[10px] uppercase tracking-widest font-bold mb-2">
@@ -210,7 +217,7 @@ const CoinDetail: React.FC = () => {
 
         <div className="flex items-center justify-between text-xs font-medium mb-8 px-2">
           <span className="text-muted-foreground uppercase tracking-widest">Total Value</span>
-          <span className="font-mono font-bold">${((parseFloat(quantity) || 0) * currentPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+          <span className="font-mono font-bold">${((parseFloat(quantity) || 0) * currentPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
         </div>
 
         <button
