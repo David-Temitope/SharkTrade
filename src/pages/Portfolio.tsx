@@ -5,28 +5,29 @@ import { Briefcase, TrendingUp, TrendingDown, LayoutGrid, PieChart, Info, Dollar
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Portfolio: React.FC = () => {
-  const { portfolio, crypto_holdings, stock_holdings, trades, ventures } = useGameStore();
+  const { portfolio, crypto_holdings, stock_holdings, trades, ventures, staff } = useGameStore();
   const [activeTab, setActiveTab] = useState<'holdings' | 'history'>('holdings');
 
-  const totalCryptoValue = crypto_holdings.reduce((acc, h) => acc + h.quantity * getCryptoPrice(h.asset_id, Date.now()), 0);
-  const totalStockValue = stock_holdings.reduce((acc, h) => acc + h.quantity * getStockPrice(h.asset_id, Date.now()), 0);
-  const totalVenturesValue = ventures.reduce((acc, v) => acc + v.invested_amount, 0);
+  const now = Date.now();
+  const totalCryptoValue = crypto_holdings.reduce((acc, h) => acc + h.quantity * getCryptoPrice(h.asset_id, now, trades), 0);
+  const totalStockValue = stock_holdings.reduce((acc, h) => acc + h.quantity * getStockPrice(h.asset_id, now, trades, staff, ventures), 0);
+  const totalVenturesValue = ventures.filter(v => v.ceo_id === 'user').reduce((acc, v) => acc + v.invested_amount, 0);
   const totalAssets = totalCryptoValue + totalStockValue + totalVenturesValue + portfolio.cash_balance;
 
   return (
     <div className="pb-12">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold tracking-tight">Portfolio</h1>
+        <h1 className="text-2xl font-bold tracking-tight uppercase tracking-widest">Portfolio</h1>
         <div className="flex bg-card border border-muted p-1 rounded-xl">
           <button
             onClick={() => setActiveTab('holdings')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'holdings' ? 'bg-primary text-white' : 'text-muted-foreground'}`}
+            className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'holdings' ? 'bg-primary text-white' : 'text-muted-foreground'}`}
           >
             Holdings
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'history' ? 'bg-primary text-white' : 'text-muted-foreground'}`}
+            className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-primary text-white' : 'text-muted-foreground'}`}
           >
             History
           </button>
@@ -37,7 +38,7 @@ const Portfolio: React.FC = () => {
         <div className="relative z-10">
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-[0.2em] mb-4">Total Net Worth</p>
           <div className="text-4xl font-black font-mono tracking-tight mb-4">${totalAssets.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
-          <div className={`flex justify-center gap-1 text-xs font-bold ${portfolio.total_pnl >= 0 ? 'text-primary' : 'text-red-500'}`}>
+          <div className={`flex justify-center gap-1 text-[10px] font-bold uppercase tracking-widest ${portfolio.total_pnl >= 0 ? 'text-primary' : 'text-red-500'}`}>
             {portfolio.total_pnl >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
             ${Math.abs(portfolio.total_pnl).toLocaleString()} Lifetime P&L
           </div>
@@ -68,22 +69,24 @@ const Portfolio: React.FC = () => {
           </section>
 
           <section>
-            <h3 className="text-sm font-bold uppercase tracking-widest mb-4 px-2">Positions</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-widest mb-4 px-2">Positions</h3>
             <div className="space-y-3">
               {[...crypto_holdings, ...stock_holdings].map(h => {
-                const currentPrice = h.asset_id.includes('_') ? getStockPrice(h.asset_id, Date.now()) : getCryptoPrice(h.asset_id, Date.now());
+                const currentPrice = h.asset_id.includes('_')
+                  ? getStockPrice(h.asset_id, now, trades, staff, ventures)
+                  : getCryptoPrice(h.asset_id, now, trades);
                 const pnl = (currentPrice - h.avg_buy_price) * h.quantity;
                 const isPositive = pnl >= 0;
 
                 return (
                   <div key={h.asset_id} className="bg-card border border-muted p-4 rounded-2xl flex items-center justify-between group hover:border-primary/30 transition-all">
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-muted/50 rounded-xl flex items-center justify-center font-bold text-xs">
+                      <div className="w-10 h-10 bg-muted/50 rounded-xl flex items-center justify-center font-bold text-[10px]">
                         {h.symbol.charAt(0)}
                       </div>
                       <div>
-                        <h4 className="font-bold text-sm leading-tight uppercase">{h.symbol}</h4>
-                        <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">{h.quantity.toLocaleString()} Shares/Units</p>
+                        <h4 className="font-bold text-xs leading-tight uppercase tracking-widest">{h.symbol}</h4>
+                        <p className="text-[8px] text-muted-foreground font-bold uppercase tracking-widest">{h.quantity.toLocaleString()} Units</p>
                       </div>
                     </div>
                     <div className="text-right">
@@ -98,7 +101,7 @@ const Portfolio: React.FC = () => {
               {crypto_holdings.length + stock_holdings.length === 0 && (
                 <div className="bg-card border border-dashed border-muted p-12 rounded-3xl text-center">
                   <Briefcase className="mx-auto text-muted-foreground mb-4 opacity-20" size={48} />
-                  <p className="text-muted-foreground text-xs font-medium italic">No assets held. Diversify your wealth.</p>
+                  <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest italic">No assets held.</p>
                 </div>
               )}
             </div>
@@ -109,7 +112,7 @@ const Portfolio: React.FC = () => {
           {trades.length === 0 ? (
             <div className="bg-card border border-dashed border-muted p-12 rounded-3xl text-center">
               <Clock className="mx-auto text-muted-foreground mb-4 opacity-20" size={48} />
-              <p className="text-muted-foreground text-xs font-medium italic">No transaction history found.</p>
+              <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-widest italic">No transaction history.</p>
             </div>
           ) : (
             trades.map(t => (
@@ -119,15 +122,15 @@ const Portfolio: React.FC = () => {
                     <ArrowRightLeft size={16} />
                   </div>
                   <div>
-                    <h4 className="font-bold text-sm leading-tight uppercase">{t.symbol}</h4>
-                    <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">
-                      {t.type} {t.quantity} @ ${t.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    <h4 className="font-bold text-xs leading-tight uppercase tracking-widest">{t.symbol}</h4>
+                    <p className="text-[8px] text-muted-foreground font-bold uppercase tracking-widest">
+                      {t.type} {t.quantity.toFixed(4)} @ ${t.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs font-mono font-bold">${t.total_value.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
-                  <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">{new Date(t.timestamp).toLocaleDateString()}</p>
+                  <p className="text-xs font-mono font-bold">${t.total_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                  <p className="text-[8px] text-muted-foreground font-bold uppercase tracking-widest">{new Date(t.timestamp).toLocaleDateString()}</p>
                 </div>
               </div>
             ))

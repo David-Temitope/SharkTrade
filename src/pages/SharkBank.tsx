@@ -3,23 +3,36 @@ import { useGameStore } from '../store/gameStore';
 import { Landmark, ShieldCheck, TrendingUp, TrendingDown, Clock, AlertCircle, ArrowUpRight, DollarSign, Wallet } from 'lucide-react';
 import { motion } from 'framer-motion';
 
+const LOAN_TIERS = [
+  { amount: 5000, minScore: 500 },
+  { amount: 8000, minScore: 520 },
+  { amount: 15000, minScore: 550 },
+  { amount: 21000, minScore: 580 },
+  { amount: 35000, minScore: 610 },
+  { amount: 60000, minScore: 650 },
+  { amount: 120000, minScore: 700 },
+  { amount: 250000, minScore: 750 },
+  { amount: 500000, minScore: 800 },
+  { amount: 1000000, minScore: 850 },
+];
+
 const SharkBank: React.FC = () => {
-  const { portfolio, loans, addLoan, repayLoan, addCash, subtractCash } = useGameStore();
-  const [selectedTier, setSelectedTier] = useState<1 | 2>(1);
+  const { portfolio, loans, addLoan, repayLoan, addCash, subtractCash, setPortfolio } = useGameStore();
 
-  const borrow = (tier: 1 | 2) => {
-    const amount = tier === 1 ? 5000 : 25000;
-    const interest = tier === 1 ? 0.12 : 0.08;
-    const dueDate = Date.now() + (14 * 24 * 3600 * 1000); // 14 days
+  const currentMaxTierIndex = Math.min(portfolio.payback_status, LOAN_TIERS.length - 1);
+  const currentMaxLoan = LOAN_TIERS[currentMaxTierIndex];
 
-    if (portfolio.credit_score < (tier === 1 ? 500 : 650)) return;
+  const borrow = (amount: number) => {
+    const interest = 0.17; // Fixed 17% interest for the initial payback calculation
+    const dueDate = Date.now() + (7 * 24 * 3600 * 1000); // 7 days deadline
+
+    if (portfolio.credit_score < currentMaxLoan.minScore) return;
 
     addLoan({
       id: Math.random().toString(36).substr(2, 9),
-      tier,
       principal: amount,
       interest_rate: interest,
-      total_owed: amount * (1 + interest),
+      total_owed: amount + (amount * interest), // $5000 -> $5850 as per requirement
       amount_repaid: 0,
       status: 'active',
       due_date: dueDate,
@@ -32,11 +45,15 @@ const SharkBank: React.FC = () => {
     const amountToRepay = loan.total_owed - loan.amount_repaid;
     if (portfolio.cash_balance < amountToRepay) return;
 
+    const isEarly = Date.now() < loan.due_date;
+
     subtractCash(amountToRepay);
     repayLoan(loan.id, amountToRepay);
-    // Increase credit score
-    useGameStore.getState().setPortfolio({
-      credit_score: Math.min(850, portfolio.credit_score + (loan.tier === 1 ? 15 : 40))
+
+    // Update payback status and credit score
+    setPortfolio({
+      payback_status: portfolio.payback_status + (isEarly ? 2 : 1),
+      credit_score: Math.min(850, portfolio.credit_score + (isEarly ? 20 : 5))
     });
   };
 
@@ -62,52 +79,49 @@ const SharkBank: React.FC = () => {
             ))}
           </div>
           <p className="text-xs text-muted-foreground max-w-[200px] mx-auto leading-relaxed">
-            Your credit score determines your interest rates and maximum leverage. Repay on time to climb the ranks.
+            Level {portfolio.payback_status} Payback Status. Reach $1,000,000 limit by maintaining perfect repayment history.
           </p>
         </div>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-accent/5 rounded-full blur-[80px] pointer-events-none" />
       </div>
 
       <div className="space-y-6 mb-8">
-        <h3 className="text-xs font-bold uppercase tracking-widest px-2">Institutional Tiers</h3>
-        <div className="grid grid-cols-1 gap-4">
-          {[
-            { tier: 1, title: 'Starter Leverage', amount: 5000, rate: 12, minScore: 500, color: 'text-primary' },
-            { tier: 2, title: 'Growth Capital', amount: 25000, rate: 8, minScore: 650, color: 'text-accent' }
-          ].map(t => (
-            <div key={t.tier} className="bg-card border border-muted p-6 rounded-3xl group transition-all hover:border-muted-foreground/30">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h4 className="font-bold text-lg leading-tight">{t.title}</h4>
-                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1">Tier {t.tier} Facility</p>
-                </div>
-                <div className={`p-3 bg-muted/50 rounded-2xl ${t.color}`}>
-                  <ArrowUpRight size={24} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                <div>
-                  <p className="text-[8px] text-muted-foreground uppercase tracking-widest font-bold mb-1">Max Principal</p>
-                  <p className="text-xl font-mono font-bold">${t.amount.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-[8px] text-muted-foreground uppercase tracking-widest font-bold mb-1">Daily Interest</p>
-                  <p className="text-xl font-mono font-bold">{t.rate}% APR</p>
-                </div>
-              </div>
-              <button
-                onClick={() => borrow(t.tier as 1 | 2)}
-                disabled={portfolio.credit_score < t.minScore}
-                className={`w-full py-4 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all ${
-                  portfolio.credit_score >= t.minScore
-                    ? 'bg-white text-black hover:bg-primary hover:text-white'
-                    : 'bg-muted/50 text-muted-foreground cursor-not-allowed border border-muted'
-                }`}
-              >
-                {portfolio.credit_score >= t.minScore ? 'Apply for Capital' : `Score Required: ${t.minScore}`}
-              </button>
+        <h3 className="text-xs font-bold uppercase tracking-widest px-2">Available Capital</h3>
+        <div className="bg-card border border-muted p-6 rounded-3xl group transition-all hover:border-muted-foreground/30">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h4 className="font-bold text-lg leading-tight">Tier {portfolio.payback_status + 1} Facility</h4>
+              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1">Institutional Credit Line</p>
             </div>
-          ))}
+            <div className={`p-3 bg-muted/50 rounded-2xl text-accent`}>
+              <ArrowUpRight size={24} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4 mb-8">
+            <div>
+              <p className="text-[8px] text-muted-foreground uppercase tracking-widest font-bold mb-1">Max Principal</p>
+              <p className="text-xl font-mono font-bold">${currentMaxLoan.amount.toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-[8px] text-muted-foreground uppercase tracking-widest font-bold mb-1">Penalty Rate</p>
+              <p className="text-xl font-mono font-bold">3% / HR</p>
+            </div>
+          </div>
+          <button
+            onClick={() => borrow(currentMaxLoan.amount)}
+            disabled={portfolio.credit_score < currentMaxLoan.minScore || loans.some(l => l.status === 'active' || l.status === 'overdue')}
+            className={`w-full py-4 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all ${
+              portfolio.credit_score >= currentMaxLoan.minScore && !loans.some(l => l.status === 'active' || l.status === 'overdue')
+                ? 'bg-white text-black hover:bg-primary hover:text-white'
+                : 'bg-muted/50 text-muted-foreground cursor-not-allowed border border-muted'
+            }`}
+          >
+            {loans.some(l => l.status === 'active' || l.status === 'overdue')
+              ? 'Active Loan Exists'
+              : portfolio.credit_score >= currentMaxLoan.minScore
+                ? `Borrow $${currentMaxLoan.amount.toLocaleString()}`
+                : `Score Required: ${currentMaxLoan.minScore}`}
+          </button>
         </div>
       </div>
 
@@ -128,7 +142,7 @@ const SharkBank: React.FC = () => {
                       <Landmark size={20} />
                     </div>
                     <div>
-                      <h4 className="font-bold text-sm leading-tight">Tier {l.tier} Loan</h4>
+                      <h4 className="font-bold text-sm leading-tight">Institutional Loan</h4>
                       <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest">Due {new Date(l.due_date).toLocaleDateString()}</p>
                     </div>
                   </div>

@@ -12,11 +12,13 @@ const stocks = [
   { id: 'health_care', name: 'BioCure Pharma', symbol: 'BCUR', sector: 'Healthcare', dividend: 2.1 },
   { id: 'consumer_goods', name: 'Prime Retail', symbol: 'PRET', sector: 'Consumer', dividend: 1.8 },
   { id: 'ind_logistics', name: 'Alpha Logistics', symbol: 'ALOG', sector: 'Industrial', dividend: 2.5 },
+  { id: 'stixx_corp', name: 'Stixx Manufacturing', symbol: 'STIX', sector: 'Industrial', dividend: 1.5 },
 ];
 
 const StockMarket: React.FC = () => {
   const [search, setSearch] = useState('');
   const [sectorFilter, setSectorFilter] = useState('All');
+  const { trades, staff, ventures } = useGameStore();
 
   const sectors = ['All', ...new Set(stocks.map(s => s.sector))];
 
@@ -25,7 +27,7 @@ const StockMarket: React.FC = () => {
     (sectorFilter === 'All' || s.sector === sectorFilter)
   );
 
-  const ptc500Value = stocks.reduce((acc, s) => acc + getStockPrice(s.id, Date.now()), 0) / stocks.length;
+  const ptc500Value = stocks.reduce((acc, s) => acc + getStockPrice(s.id, Date.now(), trades, staff, ventures), 0) / stocks.length;
 
   // Dummy chart data for PTC-500
   const chartData = Array.from({ length: 20 }, (_, i) => ({
@@ -63,9 +65,9 @@ const StockMarket: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex gap-4 mb-6 overflow-x-auto pb-2 -mx-4 px-4">
+      <div className="flex gap-4 mb-6 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
         {stocks.slice(0, 3).map(s => {
-          const price = getStockPrice(s.id, Date.now());
+          const price = getStockPrice(s.id, Date.now(), trades, staff, ventures);
           const isUp = Math.random() > 0.4;
           return (
             <div key={s.id} className="flex-shrink-0 w-32 bg-card border border-muted p-4 rounded-2xl">
@@ -97,7 +99,7 @@ const StockMarket: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-2">
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {sectors.map(s => (
             <button
               key={s}
@@ -130,7 +132,7 @@ const StockMarket: React.FC = () => {
                     </Link>
                   </td>
                   <td className="px-5 py-5">
-                    <p className="text-xs font-mono font-bold">${getStockPrice(s.id, Date.now()).toFixed(2)}</p>
+                    <p className="text-xs font-mono font-bold">${getStockPrice(s.id, Date.now(), trades, staff, ventures).toFixed(2)}</p>
                     <p className="text-[9px] text-primary font-bold mt-0.5">+0.82%</p>
                   </td>
                   <td className="px-5 py-5 text-right">
